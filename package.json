@@ -1,0 +1,35 @@
+{
+  "name": "diabeta",
+  "version": "1.0.0",
+  "description": "DiaBeta - Diabetes Assistant (Telegram Bot + Mini App + Backend API + Admin Panel)",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "test:cov": "turbo run test:cov",
+    "test:backend": "cd packages/backend && npm run test",
+    "test:frontend": "cd packages/miniapp && npm run test",
+    "test:bot": "cd packages/bot && npm run test",
+    "coverage": "npm run test:cov -- --coverageReporters=text-summary",
+    "format": "turbo run format",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "prisma:generate": "cd packages/backend && npx prisma generate",
+    "prisma:migrate": "cd packages/backend && npx prisma migrate dev",
+    "prisma:studio": "cd packages/backend && npx prisma studio"
+  },
+  "devDependencies": {
+    "turbo": "^1.11.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

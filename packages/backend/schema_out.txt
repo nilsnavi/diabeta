@@ -1,0 +1,381 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum DiabetesType {
+  TYPE_1
+  TYPE_2
+  GESTATIONAL
+  OTHER
+}
+
+enum GlucoseUnit {
+  MMOL_L
+  MG_DL
+}
+
+enum GlucoseContext {
+  FASTING
+  BEFORE_MEAL
+  AFTER_MEAL
+  BEFORE_SLEEP
+  NIGHT
+  AFTER_ACTIVITY
+  FEELING_BAD
+  OTHER
+}
+
+enum InsulinType {
+  RAPID
+  SHORT
+  INTERMEDIATE
+  LONG
+  PREMIXED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum ReminderType {
+  MEASUREMENT
+  MEDICATION
+  MEAL
+  CUSTOM
+}
+
+enum ReportFormat {
+  PDF
+  CSV
+  XLSX
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum SubscriptionPlan {
+  FREE
+  BASIC
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  TRIAL
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id         String  @id @default(uuid())
+  telegramId BigInt  @unique
+  username   String?
+  firstName  String?
+  lastName   String?
+
+  languageCode String?
+  timezone     String?
+
+  diabetesType     DiabetesType?
+  glucoseUnit      GlucoseUnit   @default(MMOL_L)
+  targetGlucoseMin Float?
+  targetGlucoseMax Float?
+
+  usesInsulin     Boolean @default(false)
+  usesMedications Boolean @default(false)
+  usesCgm         Boolean @default(false)
+
+  onboardingCompleted         Boolean   @default(false)
+  acceptedTermsAt             DateTime?
+  acceptedPrivacyAt           DateTime?
+  acceptedHealthDataConsentAt DateTime?
+
+  subscriptionPlan   SubscriptionPlan   @default(FREE)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  glucoseEntries       GlucoseEntry[]
+  insulinEntries       InsulinEntry[]
+  mealEntries          MealEntry[]
+  feelingEntries       FeelingEntry[]
+  activityEntries      ActivityEntry[]
+  reminders            Reminder[]
+  reports              Report[]
+  subscriptions        Subscription[]
+  familyAccessGiven    FamilyAccess[]  @relation("FamilyAccessOwner")
+  familyAccessReceived FamilyAccess[]  @relation("FamilyAccessMember")
+  aiChatMessages       AiChatMessage[]
+  auditLogs            AuditLog[]
+
+  @@index([telegramId])
+}
+
+// ─── GlucoseEntry ─────────────────────────────────────────────────────────────
+
+model GlucoseEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  value      Float
+  unit       GlucoseUnit    @default(MMOL_L)
+  context    GlucoseContext
+  measuredAt DateTime
+  comment    String?
+  source     String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, measuredAt])
+  @@index([userId, context])
+}
+
+// ─── InsulinEntry ─────────────────────────────────────────────────────────────
+
+model InsulinEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  insulinType InsulinType
+  dosage      Float
+  injectedAt  DateTime
+  notes       String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, injectedAt])
+}
+
+// ─── MealEntry ────────────────────────────────────────────────────────────────
+
+model MealEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  mealType      MealType
+  name          String
+  carbohydrates Float?
+  calories      Float?
+  protein       Float?
+  fat           Float?
+  eatenAt       DateTime
+  notes         String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, eatenAt])
+}
+
+// ─── FeelingEntry ─────────────────────────────────────────────────────────────
+
+model FeelingEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 1-10 scale
+  mood       Int?
+  energy     Int?
+  stress     Int?
+  notes      String?
+  recordedAt DateTime
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, recordedAt])
+}
+
+// ─── ActivityEntry ────────────────────────────────────────────────────────────
+
+model ActivityEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  activityType   String
+  durationMin    Int
+  caloriesBurned Float?
+  startedAt      DateTime
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, startedAt])
+}
+
+// ─── Reminder ─────────────────────────────────────────────────────────────────
+
+model Reminder {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  type        ReminderType
+  cronExpr    String?
+  isActive    Boolean      @default(true)
+
+  lastRunAt DateTime?
+  nextRunAt DateTime
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, nextRunAt])
+}
+
+// ─── Report ───────────────────────────────────────────────────────────────────
+
+model Report {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  format    ReportFormat
+  status    ReportStatus @default(PENDING)
+  startDate DateTime
+  endDate   DateTime
+
+  fileUrl  String?
+  fileName String?
+  fileSize BigInt?
+  errorMsg String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ─── Subscription ─────────────────────────────────────────────────────────────
+
+model Subscription {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan      SubscriptionPlan
+  status    SubscriptionStatus
+  startsAt  DateTime
+  expiresAt DateTime?
+
+  paymentId       String?
+  paymentProvider String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ─── FamilyAccess ─────────────────────────────────────────────────────────────
+
+model FamilyAccess {
+  id       String @id @default(uuid())
+  ownerId  String
+  owner    User   @relation("FamilyAccessOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberId String
+  member   User   @relation("FamilyAccessMember", fields: [memberId], references: [id], onDelete: Cascade)
+
+  canView Boolean @default(true)
+  canEdit Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([ownerId, memberId])
+  @@index([ownerId])
+  @@index([memberId])
+}
+
+// ─── KnowledgeArticle ─────────────────────────────────────────────────────────
+
+model KnowledgeArticle {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  title     String
+  content   String
+  category  String?
+  tags      String[]
+  locale    String   @default("ru")
+  published Boolean  @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([slug])
+  @@index([category])
+}
+
+// ─── AiChatMessage ────────────────────────────────────────────────────────────
+
+model AiChatMessage {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // "user" | "assistant"
+  role    String
+  content String
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─── AuditLog ─────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id     String  @id @default(uuid())
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action   String
+  entity   String
+  entityId String?
+  // NOTE: No medical payload stored here — metadata only
+  meta     Json?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity, entityId])
+}

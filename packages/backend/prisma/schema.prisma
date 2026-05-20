@@ -1,0 +1,465 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum DiabetesType {
+  TYPE_1
+  TYPE_2
+  GESTATIONAL
+  OTHER
+}
+
+enum GlucoseUnit {
+  MMOL_L
+  MG_DL
+}
+
+enum GlucoseContext {
+  FASTING
+  BEFORE_MEAL
+  AFTER_MEAL
+  BEFORE_SLEEP
+  NIGHT
+  AFTER_ACTIVITY
+  FEELING_BAD
+  OTHER
+}
+
+enum InsulinType {
+  rapid
+  short
+  basal
+  mixed
+  other
+}
+
+enum InjectionSite {
+  abdomen
+  thigh
+  arm
+  buttock
+  other
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  OTHER
+}
+
+enum ReminderType {
+  check_glucose
+  basal_insulin
+  medication
+  after_meal_glucose
+  before_sleep_glucose
+  sensor_replace
+  supplies
+  report
+  custom
+}
+
+enum ReportFormat {
+  PDF
+  CSV
+  XLSX
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum SubscriptionPlan {
+  FREE
+  BASIC
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  TRIAL
+}
+
+enum FeelingType {
+  good
+  normal
+  weakness
+  dizzy
+  bad
+  other
+}
+
+enum SymptomType {
+  sweating
+  tremor
+  hunger
+  headache
+  drowsiness
+  anxiety
+  nausea
+  thirst
+  frequent_urination
+  other
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id         String  @id @default(uuid())
+  telegramId BigInt  @unique
+  username   String?
+  firstName  String?
+  lastName   String?
+
+  languageCode String?
+  timezone     String?
+
+  diabetesType     DiabetesType?
+  glucoseUnit      GlucoseUnit   @default(MMOL_L)
+  targetGlucoseMin Float?
+  targetGlucoseMax Float?
+
+  carbsPerBreadUnit Float?
+
+  usesInsulin     Boolean @default(false)
+  usesMedications Boolean @default(false)
+  usesCgm         Boolean @default(false)
+
+  onboardingCompleted         Boolean   @default(false)
+  acceptedTermsAt             DateTime?
+  acceptedPrivacyAt           DateTime?
+  acceptedHealthDataConsentAt DateTime?
+
+  subscriptionPlan   SubscriptionPlan   @default(FREE)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  glucoseEntries       GlucoseEntry[]
+  insulinEntries       InsulinEntry[]
+  mealEntries          MealEntry[]
+  feelingEntries       FeelingEntry[]
+  activityEntries      ActivityEntry[]
+  reminders            Reminder[]
+  reports              Report[]
+  subscriptions        Subscription[]
+  familyAccessGiven    FamilyAccess[]  @relation("FamilyAccessOwner")
+  familyAccessReceived FamilyAccess[]  @relation("FamilyAccessMember")
+  aiChatMessages       AiChatMessage[]
+  auditLogs            AuditLog[]
+
+  @@index([telegramId])
+}
+
+// ─── GlucoseEntry ─────────────────────────────────────────────────────────────
+
+model GlucoseEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  value      Float
+  unit       GlucoseUnit    @default(MMOL_L)
+  context    GlucoseContext
+  measuredAt DateTime
+  comment    String?
+  source     String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, measuredAt])
+  @@index([userId, context])
+}
+
+// ─── InsulinEntry ─────────────────────────────────────────────────────────────
+
+model InsulinEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  insulinType   InsulinType
+  insulinName   String?        @db.VarChar(100)
+  units         Float
+  injectedAt    DateTime
+  injectionSite InjectionSite?
+  comment       String?        @db.VarChar(1000)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, injectedAt])
+  @@index([userId, insulinType])
+}
+
+// ─── MealEntry ────────────────────────────────────────────────────────────────
+
+model MealEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  mealType      MealType
+  name          String   @db.VarChar(200)
+  carbohydrates Float?
+  breadUnits    Float?
+  calories      Float?
+  protein       Float?
+  fat           Float?
+  photoUrl      String?
+  eatenAt       DateTime
+  notes         String?  @db.VarChar(1000)
+  isFavorite    Boolean  @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, eatenAt])
+  @@index([userId, isFavorite])
+}
+
+// ─── FeelingEntry ─────────────────────────────────────────────────────────────
+
+model FeelingEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  feeling     FeelingType
+  symptoms    SymptomType[]
+  mood        Int?
+  energyLevel Int?
+  recordedAt  DateTime      @default(now())
+  comment     String?       @db.VarChar(1000)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, recordedAt])
+  @@index([userId, feeling])
+}
+
+// ─── ActivityEntry ────────────────────────────────────────────────────────────
+
+model ActivityEntry {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activityType    ActivityType
+  durationMinutes Int
+  intensity       Intensity
+  startedAt       DateTime
+  comment         String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, startedAt])
+  @@map("activity_entries")
+}
+
+enum ActivityType {
+  walking
+  running
+  gym
+  cardio
+  strength
+  cycling
+  lfk
+  other
+}
+
+enum Intensity {
+  low
+  medium
+  high
+}
+
+// ─── Reminder ─────────────────────────────────────────────────────────────────
+
+model Reminder {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type       ReminderType
+  title      String
+  time       String
+  timezone   String       @default("UTC")
+  repeatRule String?
+  enabled    Boolean      @default(true)
+
+  lastSentAt DateTime?
+  nextRunAt  DateTime
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, nextRunAt])
+  @@index([nextRunAt, enabled])
+}
+
+// ─── Report ───────────────────────────────────────────────────────────────────
+
+model Report {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  format    ReportFormat
+  status    ReportStatus @default(PENDING)
+  startDate DateTime
+  endDate   DateTime
+
+  fileUrl  String?
+  fileName String?
+  fileSize BigInt?
+  errorMsg String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ─── Subscription ─────────────────────────────────────────────────────────────
+
+model Subscription {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan      SubscriptionPlan
+  status    SubscriptionStatus
+  startsAt  DateTime
+  expiresAt DateTime?
+
+  paymentId       String?
+  paymentProvider String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ─── FamilyAccess ─────────────────────────────────────────────────────────────
+
+enum FamilyAccessLevel {
+  view_only
+  view_and_notifications
+  full_without_delete
+}
+
+enum FamilyAccessStatus {
+  pending
+  active
+  revoked
+}
+
+model FamilyAccess {
+  id             String  @id @default(uuid())
+  ownerUserId    String
+  owner          User    @relation("FamilyAccessOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  relativeUserId String?
+  relative       User?   @relation("FamilyAccessMember", fields: [relativeUserId], references: [id], onDelete: SetNull)
+
+  accessLevel FamilyAccessLevel  @default(view_only)
+  status      FamilyAccessStatus @default(pending)
+  inviteToken String             @unique
+  inviteEmail String?
+  expiresAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerUserId])
+  @@index([relativeUserId])
+  @@index([inviteToken])
+}
+
+// ─── KnowledgeArticle ─────────────────────────────────────────────────────────
+
+enum ArticleStatus {
+  draft
+  published
+  archived
+}
+
+model KnowledgeArticle {
+  id       String        @id @default(uuid())
+  slug     String        @unique
+  title    String
+  category String
+  content  String
+  status   ArticleStatus @default(draft)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([category])
+  @@index([status])
+}
+
+// ─── AiChatMessage ────────────────────────────────────────────────────────────
+
+model AiChatMessage {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // "user" | "assistant"
+  role           String
+  content        String
+  safetyCategory String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─── AuditLog ─────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id     String  @id @default(uuid())
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action   String
+  entity   String
+  entityId String?
+  // NOTE: No medical payload stored here — metadata only
+  meta     Json?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity, entityId])
+}
